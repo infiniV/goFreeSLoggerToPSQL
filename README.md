@@ -115,14 +115,64 @@ go run main.go
 }
 ```
 
-## Technical Overview
+## Technical Overview (Detailed Per File)
 
-- **main.go**: Orchestrates startup, shutdown, and dependency injection.
-- **api/server.go**: Gin-based API with endpoints for health and call data. Handles request validation and pagination.
-- **config/config.go**: Loads configuration from environment variables or `.env` file.
-- **esl/esl_client.go**: Manages ESL connection, event subscription, reconnection, and event handling (CHANNEL_CREATE, CHANNEL_HANGUP).
-- **store/store.go**: Handles all database operations (CRUD for calls, schema initialization).
-- **utils/logger.go**: Configures Logrus for structured JSON logging.
+### main.go
+The entry point of the application. It:
+- Initializes the logger for structured output.
+- Loads configuration from environment variables or `.env`.
+- Connects to PostgreSQL using the provided DSN and initializes the schema (auto-creates the `calls` table if missing).
+- Instantiates the data store, ESL client, and API server.
+- Starts the API server in a goroutine, listening for HTTP requests.
+- Starts the ESL client, which connects to FreeSWITCH and listens for call events.
+- Handles graceful shutdown on SIGINT/SIGTERM, ensuring all resources (HTTP server, ESL client, DB pool) are properly closed.
+
+### api/server.go
+Defines the REST API using the Gin framework. Key features:
+- Sets up middleware for structured logging and panic recovery.
+- Exposes endpoints:
+  - `GET /health`: Health check.
+  - `GET /api/v1/calls`: List calls with pagination (`limit`, `offset`).
+  - `GET /api/v1/calls/:uuid`: Retrieve a call by its UUID.
+- Validates and parses query parameters, returning appropriate HTTP status codes and error messages.
+- Uses the store to fetch call data from the database.
+
+### config/config.go
+Handles application configuration. Responsibilities:
+- Loads environment variables, optionally from a `.env` file (using `godotenv`).
+- Provides default values for all config keys if not set in the environment.
+- Exposes a `Config` struct with fields for ESL address, ESL password, database URL, and API port.
+- Includes helper methods for type conversion (e.g., port as integer).
+
+### esl/esl_client.go
+Implements the FreeSWITCH ESL (Event Socket Library) client. Features:
+- Manages a persistent connection to FreeSWITCH ESL, with automatic reconnection logic.
+- Subscribes to all ESL events (in JSON format).
+- Listens for and processes events in a background goroutine.
+- Handles `CHANNEL_CREATE` and `CHANNEL_HANGUP` events:
+  - On `CHANNEL_CREATE`, parses event data and creates a new call record in the database.
+  - On `CHANNEL_HANGUP`, updates the corresponding call record with hangup time and status.
+- Uses structured logging for all connection, event, and error states.
+- Provides a `Close()` method for graceful shutdown.
+
+### store/store.go
+Implements the data access layer for PostgreSQL. Responsibilities:
+- Defines the `Call` struct, representing a call record (with fields for UUID, direction, caller, callee, start/end time, status, etc.).
+- Provides methods:
+  - `CreateCall`: Inserts a new call record.
+  - `UpdateCallHangup`: Updates a call record with hangup info.
+  - `GetCalls`: Retrieves a paginated list of calls.
+  - `GetCallByUUID`: Retrieves a call by its UUID.
+  - `InitSchema`: Creates the `calls` table if it does not exist (idempotent, for development/testing; use migrations for production).
+- Uses context timeouts for all DB operations to avoid hanging.
+- Logs all DB actions and errors with context.
+
+### utils/logger.go
+Sets up the Logrus logger for the application. Features:
+- Configures Logrus to output JSON-formatted logs with ISO8601 timestamps.
+- Outputs logs to stdout.
+- Sets the log level to `Info` by default (can be changed for debugging).
+- Returns a configured logger instance for use throughout the app.
 
 ## Logging
 
