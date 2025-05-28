@@ -92,12 +92,26 @@ go run main.go
 
 - **Health Check:**
   - `GET /health` → `{ "status": "UP" }`
+  - **Sample:**
+    ```sh
+    curl http://localhost:8080/health
+    ```
+
 - **List Calls:**
   - `GET /api/v1/calls?limit=10&offset=0`
   - Returns a paginated list of call records
+  - **Sample:**
+    ```sh
+    curl "http://localhost:8080/api/v1/calls?limit=10&offset=0"
+    ```
+
 - **Get Call by UUID:**
   - `GET /api/v1/calls/{uuid}`
   - Returns a single call record by its unique ID
+  - **Sample:**
+    ```sh
+    curl http://localhost:8080/api/v1/calls/<uuid>
+    ```
 
 ### Example Call Record
 
